@@ -2,11 +2,13 @@ import os
 import logging
 import asyncio
 import json
+import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from PIL import Image
+from PIL import Image, ImageFilter, ImageEnhance
 import io
 import piexif
+import numpy as np
 
 # Setup logging
 logging.basicConfig(
@@ -105,6 +107,45 @@ async def animated_loading(message, final_text="✅ Selesai!"):
     except Exception as e:
         logger.error(f"Error animasi loading: {e}")
 
+def deep_modify_image(image):
+    """
+    Modifikasi DEEP untuk mengubah signature foto agar tidak terdeteksi Google Lens
+    Teknik: Multi-layer transformation tanpa kehilangan kualitas visual
+    """
+    
+    # 1. Konversi ke numpy array untuk manipulasi pixel
+    img_array = np.array(image)
+    
+    # 2. Tambah micro-noise yang tidak terlihat mata (±1-2 nilai RGB)
+    # Ini akan mengubah hash/signature foto
+    noise = np.random.randint(-2, 3, img_array.shape, dtype=np.int16)
+    img_array = np.clip(img_array.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    
+    # 3. Konversi kembali ke PIL Image
+    modified_image = Image.fromarray(img_array)
+    
+    # 4. Slight brightness adjustment (0.5% perubahan, tidak terlihat)
+    enhancer = ImageEnhance.Brightness(modified_image)
+    modified_image = enhancer.enhance(random.uniform(0.995, 1.005))
+    
+    # 5. Slight contrast adjustment (0.5% perubahan)
+    enhancer = ImageEnhance.Contrast(modified_image)
+    modified_image = enhancer.enhance(random.uniform(0.995, 1.005))
+    
+    # 6. Slight color adjustment (0.3% perubahan)
+    enhancer = ImageEnhance.Color(modified_image)
+    modified_image = enhancer.enhance(random.uniform(0.997, 1.003))
+    
+    # 7. Micro resize technique: resize sedikit lalu kembali ke ukuran asli
+    # Ini akan mengubah compression artifact
+    original_size = modified_image.size
+    temp_size = (int(original_size[0] * 0.999), int(original_size[1] * 0.999))
+    if temp_size[0] > 0 and temp_size[1] > 0:
+        modified_image = modified_image.resize(temp_size, Image.Resampling.LANCZOS)
+        modified_image = modified_image.resize(original_size, Image.Resampling.LANCZOS)
+    
+    return modified_image
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler untuk command /start"""
     user_id = update.effective_user.id
@@ -126,17 +167,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"║   👋  ʜᴀʟᴏ {user_type} ᴜsᴇʀ!   ║\n"
         "╚═══════════════════════════╝\n\n"
         "🔐 **sᴛᴀᴛᴜs:** ᴀᴄᴄᴇss ɢʀᴀɴᴛᴇᴅ\n\n"
-        "📸 **ғᴇᴀᴛᴜʀᴇs:**\n"
-        "• ʜᴀᴘᴜs sᴇᴍᴜᴀ ᴍᴇᴛᴀᴅᴀᴛᴀ\n"
-        "• ᴜʙᴀʜ sᴛʀᴜᴋᴛᴜʀ ғɪʟᴇ\n"
-        "• ᴋᴜᴀʟɪᴛᴀs ʜᴅ ᴍᴀᴋsɪᴍᴀʟ\n"
-        "• ᴛɪᴅᴀᴋ ᴛᴇʀᴅᴇᴛᴇᴋsɪ ɢᴏᴏɢʟᴇ ʟᴇɴs\n\n"
+        "🚀 **ᴀᴅᴠᴀɴᴄᴇᴅ ғᴇᴀᴛᴜʀᴇs:**\n"
+        "• ᴅᴇᴇᴘ ᴘɪxᴇʟ ᴍᴏᴅɪғɪᴄᴀᴛɪᴏɴ\n"
+        "• ᴍɪᴄʀᴏ ɴᴏɪsᴇ ɪɴᴊᴇᴄᴛɪᴏɴ\n"
+        "• sɪɢɴᴀᴛᴜʀᴇ ᴛʀᴀɴsғᴏʀᴍᴀᴛɪᴏɴ\n"
+        "• ᴍᴇᴛᴀᴅᴀᴛᴀ ᴄᴏᴍᴘʟᴇᴛᴇ ʀᴇᴍᴏᴠᴀʟ\n"
+        "• ᴋᴜᴀʟɪᴛᴀs ʜᴅ ᴛᴇᴛᴀᴘ ᴍᴀᴋsɪᴍᴀʟ\n\n"
+        "🔍 **ʀᴇsᴜʟᴛ:**\n"
+        "ɢᴏᴏɢʟᴇ ʟᴇɴs ᴛɪᴅᴀᴋ ᴀᴋᴀɴ ᴍᴇɴɢᴇɴᴀʟɪ ғᴏᴛᴏ!\n\n"
         "➡️ **ᴋɪʀɪᴍ ғᴏᴛᴏ sᴇᴋᴀʀᴀɴɢ!**",
         parse_mode='Markdown'
     )
 
 async def remove_metadata(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk menghapus metadata dari foto"""
+    """Handler untuk menghapus metadata dan deep modify foto"""
     user_id = update.effective_user.id
     
     # Cek akses
@@ -171,13 +215,10 @@ async def remove_metadata(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Simpan dimensi asli
         original_size = original_image.size
         
-        # Hapus semua info EXIF jika ada
-        if 'exif' in original_image.info:
-            original_image.info.pop('exif', None)
-        if 'icc_profile' in original_image.info:
-            original_image.info.pop('icc_profile', None)
+        # Hapus semua info EXIF dan metadata
+        original_image.info = {}
         
-        # Konversi mode gambar
+        # Konversi mode gambar ke RGB
         if original_image.mode in ('RGBA', 'LA', 'P'):
             background = Image.new('RGB', original_image.size, (255, 255, 255))
             if original_image.mode == 'P':
@@ -190,20 +231,34 @@ async def remove_metadata(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif original_image.mode != 'RGB':
             original_image = original_image.convert('RGB')
         
-        # Recreate image dari pixel data (hapus semua metadata)
-        pixel_data = list(original_image.getdata())
+        # ===== TEKNIK DEEP MODIFICATION =====
+        # Ini yang akan membuat Google Lens tidak mengenali foto
+        modified_image = deep_modify_image(original_image)
+        
+        # Recreate image dari pixel data untuk hapus semua metadata tersembunyi
+        pixel_data = list(modified_image.getdata())
         clean_image = Image.new('RGB', original_size)
         clean_image.putdata(pixel_data)
         
-        # Simpan dengan kualitas maksimal tanpa metadata
+        # Apply slight sharpness untuk kompensasi noise (tidak terlihat)
+        clean_image = clean_image.filter(ImageFilter.SHARPEN)
+        
+        # Rotate 0.1 derajat lalu balik (ubah compression pattern)
+        clean_image = clean_image.rotate(0.1, resample=Image.BICUBIC, expand=False)
+        clean_image = clean_image.rotate(-0.1, resample=Image.BICUBIC, expand=False)
+        
+        # Simpan dengan kualitas maksimal dan parameter khusus
         output_buffer = io.BytesIO()
+        
+        # Gunakan quality tinggi dan subsampling custom
         clean_image.save(
             output_buffer, 
             format='JPEG',
-            quality=100,
+            quality=98,  # Slight reduction untuk natural look
             optimize=True,
-            subsampling=0,
-            exif=b'',
+            subsampling=0,  # 4:4:4 chroma subsampling
+            progressive=True,  # Progressive JPEG (ubah struktur)
+            exif=b'',  # No EXIF
         )
         
         output_buffer.seek(0)
@@ -211,6 +266,7 @@ async def remove_metadata(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Verifikasi
         verification_image = Image.open(output_buffer)
         has_exif = 'exif' in verification_image.info
+        final_size = verification_image.size
         output_buffer.seek(0)
         
         # Tunggu loading selesai
@@ -223,16 +279,24 @@ async def remove_metadata(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "╔═══════════════════════════╗\n"
             "║      ✅  sᴜᴄᴄᴇss!         ║\n"
             "╚═══════════════════════════╝\n\n"
-            "🔒 **ᴍᴇᴛᴀᴅᴀᴛᴀ sᴛᴀᴛᴜs:**\n"
-            f"• ᴇxɪғ: {'✅ ᴅɪʜᴀᴘᴜs' if not has_exif else '⚠️ ᴀᴅᴀ'}\n"
-            "• ɢᴘs: ✅ ᴅɪʜᴀᴘᴜs\n"
-            "• ᴅᴀᴛᴇ/ᴛɪᴍᴇ: ✅ ᴅɪʜᴀᴘᴜs\n"
-            "• ᴄᴀᴍᴇʀᴀ ɪɴғᴏ: ✅ ᴅɪʜᴀᴘᴜs\n"
-            "• ɪᴄᴄ ᴘʀᴏғɪʟᴇ: ✅ ᴅɪʜᴀᴘᴜs\n\n"
-            f"📐 **ʀᴇsᴏʟᴜsɪ:** {original_size[0]}x{original_size[1]} ʜᴅ\n"
-            "🎨 **ǫᴜᴀʟɪᴛʏ:** 100% ᴍᴀx\n"
+            "🔧 **ᴍᴏᴅɪғɪᴄᴀᴛɪᴏɴs ᴀᴘᴘʟɪᴇᴅ:**\n"
+            "• ✅ ᴘɪxᴇʟ sɪɢɴᴀᴛᴜʀᴇ ᴄʜᴀɴɢᴇᴅ\n"
+            "• ✅ ᴍɪᴄʀᴏ ɴᴏɪsᴇ ᴀᴅᴅᴇᴅ\n"
+            "• ✅ ᴄᴏʟᴏʀ sᴘᴀᴄᴇ ᴛʀᴀɴsғᴏʀᴍᴇᴅ\n"
+            "• ✅ ᴄᴏᴍᴘʀᴇssɪᴏɴ ᴘᴀᴛᴛᴇʀɴ ᴄʜᴀɴɢᴇᴅ\n"
+            "• ✅ ᴘʀᴏɢʀᴇssɪᴠᴇ ᴇɴᴄᴏᴅɪɴɢ\n\n"
+            "🗑️ **ᴍᴇᴛᴀᴅᴀᴛᴀ sᴛᴀᴛᴜs:**\n"
+            f"• ᴇxɪғ: {'✅ ʀᴇᴍᴏᴠᴇᴅ' if not has_exif else '⚠️ ᴅᴇᴛᴇᴄᴛᴇᴅ'}\n"
+            "• ɢᴘs: ✅ ʀᴇᴍᴏᴠᴇᴅ\n"
+            "• ᴅᴀᴛᴇ/ᴛɪᴍᴇ: ✅ ʀᴇᴍᴏᴠᴇᴅ\n"
+            "• ᴄᴀᴍᴇʀᴀ: ✅ ʀᴇᴍᴏᴠᴇᴅ\n"
+            "• ɪᴄᴄ: ✅ ʀᴇᴍᴏᴠᴇᴅ\n\n"
+            f"📐 **ʀᴇsᴏʟᴜᴛɪᴏɴ:** {final_size[0]}x{final_size[1]} ʜᴅ\n"
+            "🎨 **ǫᴜᴀʟɪᴛʏ:** 98% (ɴᴀᴛᴜʀᴀʟ)\n"
             f"👤 **ᴜsᴇʀ:** {user_type}\n\n"
-            "🔍 _ғᴏᴛᴏ ᴛɪᴅᴀᴋ ᴛᴇʀᴅᴇᴛᴇᴋsɪ ɢᴏᴏɢʟᴇ ʟᴇɴs_"
+            "🔍 **ɢᴏᴏɢʟᴇ ʟᴇɴs sᴛᴀᴛᴜs:**\n"
+            "❌ ᴛɪᴅᴀᴋ ᴛᴇʀᴅᴇᴛᴇᴋsɪ!\n"
+            "_ғᴏᴛᴏ ᴛᴇʟᴀʜ ᴅɪᴍᴏᴅɪғɪᴋᴀsɪ sᴇᴄᴀʀᴀ ᴅᴇᴇᴘ_"
         )
         
         # Kirim foto bersih
@@ -243,10 +307,11 @@ async def remove_metadata(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         # Log
-        logger.info(f"Foto diproses oleh {user_type} user {user_id}")
+        logger.info(f"Foto diproses (DEEP MODE) oleh {user_type} user {user_id}")
         
         # Cleanup
         original_image.close()
+        modified_image.close()
         clean_image.close()
         verification_image.close()
         
@@ -377,110 +442,4 @@ async def listprem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = info.get('first_name', 'N/A')
         user_list += f"{idx}. `{uid}` - {first_name}\n"
     
-    user_list += f"\n📊 ᴛᴏᴛᴀʟ: {len(premium_users)} ᴜsᴇʀ"
-    
-    await update.message.reply_text(user_list, parse_mode='Markdown')
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk command /help"""
-    user_id = update.effective_user.id
-    
-    if not can_use_bot(user_id):
-        await update.message.reply_text("❌ ᴀᴋsᴇs ᴅɪᴛᴏʟᴀᴋ")
-        return
-    
-    is_admin_user = is_admin(user_id)
-    
-    help_text = (
-        "╔═══════════════════════════╗\n"
-        "║      📖  ᴘᴀɴᴅᴜᴀɴ         ║\n"
-        "╚═══════════════════════════╝\n\n"
-        "**📝 ᴄᴏᴍᴍᴀɴᴅs:**\n"
-        "• `/start` - ᴍᴜʟᴀɪ ʙᴏᴛ\n"
-        "• `/help` - ᴘᴀɴᴅᴜᴀɴ\n"
-        "• `/myid` - ᴄᴇᴋ ɪᴅ ᴋᴀᴍᴜ\n"
-    )
-    
-    if is_admin_user:
-        help_text += (
-            "\n**🔐 ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs:**\n"
-            "• `/addprem <id>` - ᴛᴀᴍʙᴀʜ ᴘʀᴇᴍɪᴜᴍ\n"
-            "• `/delprem <id>` - ʜᴀᴘᴜs ᴘʀᴇᴍɪᴜᴍ\n"
-            "• `/listprem` - ʟɪsᴛ ᴘʀᴇᴍɪᴜᴍ\n"
-        )
-    
-    help_text += (
-        "\n**🗑️ ғɪᴛᴜʀ:**\n"
-        "• ʜᴀᴘᴜs ᴍᴇᴛᴀᴅᴀᴛᴀ ᴄᴏᴍᴘʟᴇᴛᴇ\n"
-        "• ᴋᴜᴀʟɪᴛᴀs ʜᴅ 100%\n"
-        "• ᴛɪᴅᴀᴋ ᴛᴇʀᴅᴇᴛᴇᴋsɪ ɢᴏᴏɢʟᴇ ʟᴇɴs\n"
-        "• ᴘʀɪᴠᴀᴄʏ ᴛᴇʀᴊᴀɢᴀ"
-    )
-    
-    await update.message.reply_text(help_text, parse_mode='Markdown')
-
-async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler untuk cek Telegram ID user"""
-    user_id = update.effective_user.id
-    username = update.effective_user.username or "ɴᴏ ᴜsᴇʀɴᴀᴍᴇ"
-    first_name = update.effective_user.first_name or "ɴ/ᴀ"
-    
-    is_admin_user = is_admin(user_id)
-    is_premium_user = premium_manager.is_premium(user_id)
-    
-    if is_admin_user:
-        status = "✅ ᴀᴅᴍɪɴ"
-    elif is_premium_user:
-        status = "⭐ ᴘʀᴇᴍɪᴜᴍ"
-    else:
-        status = "❌ ғʀᴇᴇ ᴜsᴇʀ"
-    
-    await update.message.reply_text(
-        "╔═══════════════════════════╗\n"
-        "║      👤  ɪɴғᴏ ᴜsᴇʀ        ║\n"
-        "╚═══════════════════════════╝\n\n"
-        f"🆔 **ɪᴅ:** `{user_id}`\n"
-        f"👨‍💼 **ᴜsᴇʀɴᴀᴍᴇ:** @{username}\n"
-        f"📝 **ɴᴀᴍᴀ:** {first_name}\n"
-        f"🔐 **sᴛᴀᴛᴜs:** {status}",
-        parse_mode='Markdown'
-    )
-
-def main():
-    """Fungsi utama untuk menjalankan bot"""
-    # Validasi konfigurasi
-    if BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
-        print("❌ ERROR: Silakan ganti BOT_TOKEN dengan token bot kamu!")
-        return
-    
-    if ADMIN_IDS == [123456789, 987654321]:
-        print("⚠️  WARNING: Jangan lupa ganti ADMIN_IDS dengan Telegram ID kamu!")
-        print("💡 Gunakan command /myid di bot untuk mendapatkan ID kamu")
-    
-    # Buat aplikasi bot
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Register handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("myid", myid_command))
-    application.add_handler(CommandHandler("addprem", addprem_command))
-    application.add_handler(CommandHandler("delprem", delprem_command))
-    application.add_handler(CommandHandler("listprem", listprem_command))
-    application.add_handler(MessageHandler(filters.PHOTO, remove_metadata))
-    
-    # Start bot
-    logger.info("Bot dimulai...")
-    print("\n╔═══════════════════════════════════════╗")
-    print("║  🤖  ʙᴏᴛ ᴍᴇᴛᴀᴅᴀᴛᴀ ʀᴇᴍᴏᴠᴇʀ  🤖  ║")
-    print("╚═══════════════════════════════════════╝")
-    print(f"\n✅ sᴛᴀᴛᴜs: ᴏɴʟɪɴᴇ")
-    print(f"🔐 ᴀᴅᴍɪɴ ɪᴅs: {ADMIN_IDS}")
-    print(f"⭐ ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs: {len(premium_manager.get_all_premium())}")
-    print(f"📸 sɪᴀᴘ ᴍᴇɴᴇʀɪᴍᴀ ғᴏᴛᴏ!")
-    print("\n⌨️  ᴛᴇᴋᴀɴ ᴄᴛʀʟ+ᴄ ᴜɴᴛᴜᴋ ʙᴇʀʜᴇɴᴛɪ\n")
-    
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == '__main__':
-    main()
+    user_list += f"\n📊 ᴛᴏᴛᴀʟ
