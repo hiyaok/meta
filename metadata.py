@@ -442,4 +442,117 @@ async def listprem_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = info.get('first_name', 'N/A')
         user_list += f"{idx}. `{uid}` - {first_name}\n"
     
-    user_list += f"\n📊 ᴛᴏᴛᴀʟ
+    user_list += f"\n📊 ᴛᴏᴛᴀʟ: {len(premium_users)} ᴜsᴇʀ"
+    
+    await update.message.reply_text(user_list, parse_mode='Markdown')
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk command /help"""
+    user_id = update.effective_user.id
+    
+    if not can_use_bot(user_id):
+        await update.message.reply_text("❌ ᴀᴋsᴇs ᴅɪᴛᴏʟᴀᴋ")
+        return
+    
+    is_admin_user = is_admin(user_id)
+    
+    help_text = (
+        "╔═══════════════════════════╗\n"
+        "║      📖  ᴘᴀɴᴅᴜᴀɴ         ║\n"
+        "╚═══════════════════════════╝\n\n"
+        "**🚀 ᴀᴅᴠᴀɴᴄᴇᴅ ғᴇᴀᴛᴜʀᴇs:**\n"
+        "• ᴅᴇᴇᴘ ᴘɪxᴇʟ ᴍᴏᴅɪғɪᴄᴀᴛɪᴏɴ\n"
+        "• ᴍɪᴄʀᴏ ɴᴏɪsᴇ ɪɴᴊᴇᴄᴛɪᴏɴ\n"
+        "• sɪɢɴᴀᴛᴜʀᴇ ᴛʀᴀɴsғᴏʀᴍᴀᴛɪᴏɴ\n"
+        "• ᴄᴏᴍᴘʀᴇssɪᴏɴ ᴘᴀᴛᴛᴇʀɴ ᴄʜᴀɴɢᴇ\n"
+        "• ᴍᴇᴛᴀᴅᴀᴛᴀ ᴄᴏᴍᴘʟᴇᴛᴇ ʀᴇᴍᴏᴠᴀʟ\n\n"
+        "**📝 ᴄᴏᴍᴍᴀɴᴅs:**\n"
+        "• `/start` - ᴍᴜʟᴀɪ ʙᴏᴛ\n"
+        "• `/help` - ᴘᴀɴᴅᴜᴀɴ\n"
+        "• `/myid` - ᴄᴇᴋ ɪᴅ & sᴛᴀᴛᴜs\n"
+    )
+    
+    if is_admin_user:
+        help_text += (
+            "\n**🔐 ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs:**\n"
+            "• `/addprem <id>` - ᴛᴀᴍʙᴀʜ ᴘʀᴇᴍɪᴜᴍ\n"
+            "• `/delprem <id>` - ʜᴀᴘᴜs ᴘʀᴇᴍɪᴜᴍ\n"
+            "• `/listprem` - ʟɪsᴛ ᴘʀᴇᴍɪᴜᴍ\n"
+        )
+    
+    help_text += (
+        "\n**🔍 ʀᴇsᴜʟᴛ:**\n"
+        "ғᴏᴛᴏ ᴛɪᴅᴀᴋ ᴀᴋᴀɴ ᴛᴇʀᴅᴇᴛᴇᴋsɪ\n"
+        "ᴅɪ ɢᴏᴏɢʟᴇ ʟᴇɴs ᴀᴛᴀᴜ ʀᴇᴠᴇʀsᴇ\n"
+        "ɪᴍᴀɢᴇ sᴇᴀʀᴄʜ ʟᴀɪɴɴʏᴀ!"
+    )
+    
+    await update.message.reply_text(help_text, parse_mode='Markdown')
+
+async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler untuk cek Telegram ID user"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "ɴᴏ ᴜsᴇʀɴᴀᴍᴇ"
+    first_name = update.effective_user.first_name or "ɴ/ᴀ"
+    
+    is_admin_user = is_admin(user_id)
+    is_premium_user = premium_manager.is_premium(user_id)
+    
+    if is_admin_user:
+        status = "✅ ᴀᴅᴍɪɴ"
+    elif is_premium_user:
+        status = "⭐ ᴘʀᴇᴍɪᴜᴍ"
+    else:
+        status = "❌ ғʀᴇᴇ ᴜsᴇʀ"
+    
+    await update.message.reply_text(
+        "╔═══════════════════════════╗\n"
+        "║      👤  ɪɴғᴏ ᴜsᴇʀ        ║\n"
+        "╚═══════════════════════════╝\n\n"
+        f"🆔 **ɪᴅ:** `{user_id}`\n"
+        f"👨‍💼 **ᴜsᴇʀɴᴀᴍᴇ:** @{username}\n"
+        f"📝 **ɴᴀᴍᴀ:** {first_name}\n"
+        f"🔐 **sᴛᴀᴛᴜs:** {status}",
+        parse_mode='Markdown'
+    )
+
+def main():
+    """Fungsi utama untuk menjalankan bot"""
+    # Validasi konfigurasi
+    if BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
+        print("❌ ERROR: Silakan ganti BOT_TOKEN dengan token bot kamu!")
+        return
+    
+    if ADMIN_IDS == [123456789, 987654321]:
+        print("⚠️  WARNING: Jangan lupa ganti ADMIN_IDS dengan Telegram ID kamu!")
+        print("💡 Gunakan command /myid di bot untuk mendapatkan ID kamu")
+    
+    # Buat aplikasi bot
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Register handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("myid", myid_command))
+    application.add_handler(CommandHandler("addprem", addprem_command))
+    application.add_handler(CommandHandler("delprem", delprem_command))
+    application.add_handler(CommandHandler("listprem", listprem_command))
+    application.add_handler(MessageHandler(filters.PHOTO, remove_metadata))
+    
+    # Start bot
+    logger.info("Bot dimulai...")
+    print("\n╔═══════════════════════════════════════╗")
+    print("║  🤖  ʙᴏᴛ ᴍᴇᴛᴀᴅᴀᴛᴀ ʀᴇᴍᴏᴠᴇʀ  🤖  ║")
+    print("║      (ᴅᴇᴇᴘ ᴍᴏᴅɪғɪᴄᴀᴛɪᴏɴ ᴍᴏᴅᴇ)     ║")
+    print("╚═══════════════════════════════════════╝")
+    print(f"\n✅ sᴛᴀᴛᴜs: ᴏɴʟɪɴᴇ")
+    print(f"🔐 ᴀᴅᴍɪɴ ɪᴅs: {ADMIN_IDS}")
+    print(f"⭐ ᴘʀᴇᴍɪᴜᴍ ᴜsᴇʀs: {len(premium_manager.get_all_premium())}")
+    print(f"🚀 ᴍᴏᴅᴇ: ᴀᴅᴠᴀɴᴄᴇᴅ ᴅᴇᴇᴘ ᴍᴏᴅɪғɪᴄᴀᴛɪᴏɴ")
+    print(f"📸 sɪᴀᴘ ᴍᴇɴᴇʀɪᴍᴀ ғᴏᴛᴏ!")
+    print("\n⌨️  ᴛᴇᴋᴀɴ ᴄᴛʀʟ+ᴄ ᴜɴᴛᴜᴋ ʙᴇʀʜᴇɴᴛɪ\n")
+    
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == '__main__':
+    main()
