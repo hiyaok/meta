@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ========== KONFIGURASI ==========
-BOT_TOKEN = '7776609805:AAHnDN-jnhl-TkG0g6FR8b3LnB9B0GeSyNc'
+BOT_TOKEN = '7776609805:AAH42VENDX3Kg3fZBe93Xkkgzl1ylB6EP2s'
 ADMIN_IDS = [123456789, 5988451717]  # Ganti dengan Telegram ID admin
 PREMIUM_FILE = 'premium_users.json'  # File untuk menyimpan user premium
 # =================================
